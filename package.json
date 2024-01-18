@@ -1,0 +1,16 @@
+{
+  "name": "minifirefly",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "electron ./main.js"
+  },
+  "devDependencies": {
+    "electron": "^26.1.0",
+    "electron-builder": "^24.6.4"
+  },
+  "dependencies": {
+    "@iota/sdk": "^1.1.4",
+    "reflect-metadata": "^0.1.13"
+  }
+}
