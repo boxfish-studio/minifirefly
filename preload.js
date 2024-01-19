@@ -1,43 +1,31 @@
 require('reflect-metadata');
 const { contextBridge } = require('electron')
-const SDK = require('@iota/sdk');
+const { SecretManager, Wallet, Utils } = require('@iota/sdk');
+const fs = require('node:fs');
 
-console.log(SDK)
-
-// `exposeInMainWorld` can't detect attributes and methods of `prototype`, manually patching it.
-function withPrototype(obj) {
-  const protos = Object.getPrototypeOf(obj)
-
-  for (const [key, value] of Object.entries(protos)) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) continue
-
-    if (typeof value === 'function') {
-      // Some native APIs, like `NodeJS.EventEmitter['on']`, don't work in the Renderer process. Wrapping them into a function.
-      obj[key] = function (...args) {
-        return value.call(obj, ...args)
+function bindMethodsAcrossContextBridge(prototype, object) {
+  const prototypeProperties = Object.getOwnPropertyNames(prototype)
+  prototypeProperties.forEach((key) => {
+      if (key !== 'constructor') {
+          object[key] = object[key].bind(object)
       }
-    } else {
-      obj[key] = value
-    }
-  }
-  return obj
+  })
 }
 
 // IOTA
 const WALLET_DB_PATH = 'MINIFIREFLY-DB';
-const NODE_URL = console.error("ADD A NODE!")
+const NODE_URL = process.env["MINIFIREFLY_NODE"]
 const STRONGHOLD_PASSWORD = 'firefly';
-const STRONGHOLD_SNAPSHOT_PATH = 'minifirefly.stronghold';
+const STRONGHOLD_SNAPSHOT_PATH = 'MINIFIREFLY-DB/minifirefly.stronghold';
+const strongholdSecretManager = {
+  stronghold: {
+    snapshotPath: STRONGHOLD_SNAPSHOT_PATH,
+    password: STRONGHOLD_PASSWORD,
+  },
+};
 
 contextBridge.exposeInMainWorld('__MINIFIREFLY__', {
   async createWallet() {
-    const strongholdSecretManager = {
-      stronghold: {
-        snapshotPath: STRONGHOLD_SNAPSHOT_PATH,
-        password: STRONGHOLD_PASSWORD,
-      },
-    };
-
     const secretManager = SecretManager.create(strongholdSecretManager);
     const mnemonic = Utils.generateMnemonic();
     await secretManager.storeMnemonic(mnemonic);
@@ -64,9 +52,29 @@ contextBridge.exposeInMainWorld('__MINIFIREFLY__', {
     };
 
     const wallet = await Wallet.create(walletOptions);
+    bindMethodsAcrossContextBridge(Wallet.prototype, wallet)
+    return wallet
+  },
+  async loadWallet() {
+    const walletOptions = {
+      storagePath: WALLET_DB_PATH,
+      clientOptions: {
+        nodes: [NODE_URL],
+      },
+      bipPath: {
+        coinType: 1,
+      },
+      secretManager: strongholdSecretManager,
+    };
 
-    console.log('Generated wallet with address: ' + (await wallet.address()));
-
-    return withPrototype(wallet)
+    const wallet = await Wallet.create(walletOptions);
+    bindMethodsAcrossContextBridge(Wallet.prototype, wallet)
+    return wallet
+  },
+  removeWallet() {
+    fs.rmSync(WALLET_DB_PATH, {
+      recursive: true,
+      force: true
+    })
   }
 })
