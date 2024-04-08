@@ -1,7 +1,15 @@
-const { app, BrowserWindow } = require('electron')
+const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('node:path')
 
 let win
+
+let versionDetails = {
+  upToDate: true,
+  currentVersion: app.getVersion(),
+  newVersion: '',
+  newVersionReleaseDate: new Date(),
+  changelog: '',
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -16,6 +24,15 @@ function createWindow() {
 
   win.openDevTools();
 }
+
+ipcMain.handle('get-path', (_e, path) => {
+  const allowedPaths = ['userData']
+  if (allowedPaths.indexOf(path) === -1) {
+      throw Error(`Path ${path} is not allowed`)
+  }
+  return app.getPath(path)
+})
+ipcMain.handle('get-version-details', (_e) => versionDetails)
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
